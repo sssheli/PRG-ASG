@@ -117,6 +117,22 @@ print("How quickly can you get the 1000 GP you need to retire")
 print("  and live happily ever after?")
 print("-----------------------------------------------------------")
 
+while True:
+    show_main_menu() 
+    choice1 = input("Your choice?").strip().lower()
+    if choice1 == "n":
+        show_town_menu()
+        choice2 = input("Your choice?").strip().lower()
+    elif choice1 == "l":
+        load_game(game_map, fog, player)
+        print("Game loaded successfully!")
+        show_town_menu()
+        choice2 = input("Your choice? ").strip().lower()
+    elif choice1 == "q":
+        print("Thanks for playing. See you next time!")
+        break
+    else:
+        print("Invalid choice. Please restart and choose N, L, or Q.")
 # TODO: The game!
     
     
