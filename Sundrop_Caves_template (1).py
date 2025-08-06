@@ -121,6 +121,8 @@ while True:
     show_main_menu() 
     choice1 = input("Your choice?").strip().lower()
     if choice1 == "n":
+        miner = input("Greetings, miner! What is your name? ")
+        print(f"Pleased to meet you, {miner}. Welcome to Sundrop Town!")
         show_town_menu()
         choice2 = input("Your choice?").strip().lower()
     elif choice1 == "l":
