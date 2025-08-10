@@ -61,6 +61,10 @@ def initialize_game(game_map, fog, player):
     
 # This function draws the entire map, covered by the fof
 def draw_map(game_map, fog, player):
+    print("\n--- Mine Map (placeholder) ---")
+    print("[###]")
+    print("[#P#]   (P = player)")
+    print("[###]")
     return
 
 # This function draws the 3x3 viewport
@@ -69,6 +73,14 @@ def draw_view(game_map, fog, player):
 
 # This function shows the information for the player
 def show_information(player):
+    print("\n--- Player Information ---")
+    print(f"Name   : {player.get('name', 'Unknown')}")
+    print(f"Day    : {player.get('day', 1)}")
+    print(f"Turns  : {player.get('turns', TURNS_PER_DAY)}/{TURNS_PER_DAY}")
+    print(f"GP     : {player.get('GP', 0)}")
+    print(f"Copper : {player.get('copper', 0)}")
+    print(f"Silver : {player.get('silver', 0)}")
+    print(f"Gold   : {player.get('gold', 0)}")
     return
 
 # This function saves the game
@@ -105,6 +117,10 @@ def show_town_menu():
     print("Sa(V)e game")
     print("(Q)uit to main menu")
     print("------------------------")
+
+    def buy_stuff():
+        print("\n--- Sundrop Shop (placeholder) ---")
+        print("Nothing to buy yet. (Implement later)")
             
 
 #--------------------------- MAIN GAME ---------------------------
@@ -113,28 +129,58 @@ print("---------------- Welcome to Sundrop Caves! ----------------")
 print("You spent all your money to get the deed to a mine, a small")
 print("  backpack, a simple pickaxe and a magical portal stone.")
 print()
-print("How quickly can you get the 1000 GP you need to retire")
+print("How quickly can you get the 500 GP you need to retire")
 print("  and live happily ever after?")
 print("-----------------------------------------------------------")
 
+def town_menu():
+    while True:
+        print(f"DAY {player.get('day', 1)}")
+        show_town_menu()
+        choice = input("Your choice? ").strip().lower()
+
+        if choice == "b":
+            print("Buying is not implemented yet.")
+        elif choice == "i":
+            show_information(player)
+            input("\n(Press Enter to return to town...)")
+        elif choice == "m":
+            draw_map(game_map, fog, player)
+            input("\n(Press Enter to return to town...)")
+        elif choice == "e":
+            print("Entering the mine... (not implemented yet)")
+            # return here later when you implement the mine
+        elif choice == "v":
+            save_game(game_map, fog, player)
+            print("Game saved!")
+        elif choice == "q":
+            print("Returning to main menu...")
+            return   
+        else:
+            print("Invalid choice in town. Try again.\n")
+
 while True:
-    show_main_menu() 
-    choice1 = input("Your choice?").strip().lower()
+    show_main_menu()
+    choice1 = input("Your choice? ").strip().lower()
+
     if choice1 == "n":
         miner = input("Greetings, miner! What is your name? ")
+        player['day'] = 1
         print(f"Pleased to meet you, {miner}. Welcome to Sundrop Town!")
-        show_town_menu()
-        choice2 = input("Your choice?").strip().lower()
+        town_menu()                 
+
     elif choice1 == "l":
         load_game(game_map, fog, player)
         print("Game loaded successfully!")
-        show_town_menu()
-        choice2 = input("Your choice? ").strip().lower()
+        town_menu()                
+
     elif choice1 == "q":
         print("Thanks for playing. See you next time!")
         break
     else:
         print("Invalid choice. Please restart and choose N, L, or Q.")
+
+
 # TODO: The game!
     
     
