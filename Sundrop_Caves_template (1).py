@@ -41,18 +41,17 @@ def load_map(filename, map_struct):
 
     map_file.close()
 
-#function clears the fog of war at the 3x3 square around the player
+
 def clear_fog(fog, player):
     px = player['x']
     py = player['y']
-    for dy in (-1, 0, 1):
-        for dx in (-1, 0, 1):
+    for dy in (0, 1):
+        for dx in (0, 1):
             x = px + dx
             y = py + dy
-            if x >= 0 and x < MAP_WIDTH and y >= 0 and y < MAP_HEIGHT:
+            if 0 <= x < MAP_WIDTH and 0 <= y < MAP_HEIGHT:
                 fog[y][x] = False
     return
-
 def initialize_game(game_map, fog, player):
     # initialize map
     load_map("level1.txt", game_map)
@@ -71,17 +70,23 @@ def initialize_game(game_map, fog, player):
                 start_x = x
                 start_y = y
     
-    player['x'] = 0
-    player['y'] = 0
+    player['x'] = start_x
+    player['y'] = start_y
     player['copper'] = 0
     player['silver'] = 0
     player['gold'] = 0
     player['GP'] = 0
     player['steps'] = 0
     player['turns'] = TURNS_PER_DAY
+    player['pickaxe'] = 1      # lvl 1: can mine Copper only
+    player['capacity'] = 10
+    player['backpack_upgrade_cost'] = 20
 
     clear_fog(fog, player)
     
+def inventory_count():
+    return player['copper'] + player['silver'] + player['gold']
+
 # This function draws the entire map, covered by the fof
 def draw_map(game_map, fog, player):
     print("\n----- Mine Map -----")
@@ -99,93 +104,114 @@ def draw_map(game_map, fog, player):
 
 # This function draws the 3x3 viewport
 def draw_view(game_map, fog, player):
-    print("\n--- View (3x3) ---")
     px = player['x']
     py = player['y']
+
+    lines = []
     for y in range(py - 1, py + 2):
         row = ""
         for x in range(px - 1, px + 2):
-            if x >= 0 and x < MAP_WIDTH and y >= 0 and y < MAP_HEIGHT:
+            if x < 0 or x >= MAP_WIDTH or y < 0 or y >= MAP_HEIGHT:
+                row += "#"
+            else:
                 if fog[y][x]:
-                    row += '?'
+                    row += "#"
                 else:
                     if x == px and y == py:
-                        row += 'P'
+                        row += "M"
                     else:
                         row += game_map[y][x]
-            else:
-                row += ' '
-        print(row)
+        lines.append(row)
 
+    print("+---+")
+    for row in lines:
+        if len(row) < 3:
+            row = row + " " * (3 - len(row))
+        else:
+            row = row[:3]
+        print("|" + row + "|")
+    print("+---+")
 
-# This function shows the information for the player
 def show_information(player):
     print("\n--- Player Information ---")
-    print(f"Name   : {player.get('name', 'Unknown')}")
-    print(f"Day    : {player.get('day', 1)}")
-    print(f"Turns  : {player.get('turns', TURNS_PER_DAY)}/{TURNS_PER_DAY}")
-    print(f"GP     : {player.get('GP', 0)}")
-    print(f"Copper : {player.get('copper', 0)}")
-    print(f"Silver : {player.get('silver', 0)}")
-    print(f"Gold   : {player.get('gold', 0)}")
+    print("Name   : " + player['name'])
+    print("Day    : " + str(player['day']))
+    print("Turns  : " + str(player['turns']) + "/" + str(TURNS_PER_DAY))
+    print("GP     : " + str(player['GP']))
+    print("Copper : " + str(player['copper']))
+    print("Silver : " + str(player['silver']))
+    print("Gold   : " + str(player['gold']))
     return
 
-# This function saves the game
 def save_game(game_map, fog, player):
-    def save_game(game_map, fog, player):
-        f = open("save.txt", "w")
-        f.write(str(player['x']) + " " + str(player['y']) + "\n")
-        f.write(str(player['day']) + " " + str(player['turns']) + " " + str(player['GP']) + "\n")
-        f.write(str(player['copper']) + " " + str(player['silver']) + " " + str(player['gold']) + "\n")
-        f.write(player['name'] + "\n")
-        f.write("FOG\n")
-        for y in range(MAP_HEIGHT):
-            row = ""
-            for x in range(MAP_WIDTH):
-                if fog[y][x]:
-                    row += "1"
-                else:
-                    row += "0"
-            f.write(row + "\n")
-        f.close()
-        print("Game saved to save.txt")
+    f = open("save.txt", "w")  # use one filename consistently
+
+    # 1: position
+    f.write(str(player['x']) + " " + str(player['y']) + "\n")
+    # 2: day, turns, GP
+    f.write(str(player['day']) + " " + str(player['turns']) + " " + str(player['GP']) + "\n")
+    # 3: ore
+    f.write(str(player['copper']) + " " + str(player['silver']) + " " + str(player['gold']) + "\n")
+    # 4: name
+    f.write(player['name'] + "\n")
+    # 5: upgrades & steps
+    f.write(str(player['pickaxe']) + " " + str(player['capacity']) + " " +
+            str(player['backpack_upgrade_cost']) + " " + str(player['steps']) + "\n")
+    # 6: fog header
+    f.write("FOG\n")
+    
+    for y in range(MAP_HEIGHT):
+        row = ""
+        for x in range(MAP_WIDTH):
+            row += "1" if fog[y][x] else "0"
+        f.write(row + "\n")
+
+    f.close()
+    print("Game saved to save.txt")
         
-# This function loads the game
 def load_game(game_map, fog, player):
     load_map("level1.txt", game_map)
 
     f = open("save.txt", "r")
-    parts = f.readline().rstrip("\n").split()
-    player['x'] = int(parts[0])
-    player['y'] = int(parts[1])
 
+    # 1: position
     parts = f.readline().rstrip("\n").split()
-    player['day'] = int(parts[0])
-    player['turns'] = int(parts[1])
-    player['GP'] = int(parts[2])
+    player['x'] = int(parts[0]); player['y'] = int(parts[1])
 
+    # 2: day, turns, GP
     parts = f.readline().rstrip("\n").split()
-    player['copper'] = int(parts[0])
-    player['silver'] = int(parts[1])
-    player['gold'] = int(parts[2])
+    player['day'] = int(parts[0]); player['turns'] = int(parts[1]); player['GP'] = int(parts[2])
 
+    # 3: ore
+    parts = f.readline().rstrip("\n").split()
+    player['copper'] = int(parts[0]); player['silver'] = int(parts[1]); player['gold'] = int(parts[2])
+
+    # 4: name
     player['name'] = f.readline().rstrip("\n")
 
-    f.readline()  
+    # 5: upgrades & steps
+    parts = f.readline().rstrip("\n").split()
+    player['pickaxe'] = int(parts[0])
+    player['capacity'] = int(parts[1])
+    player['backpack_upgrade_cost'] = int(parts[2])
+    player['steps'] = int(parts[3])
+
+    # 6: "FOG"
+    f.readline()
 
     fog[:] = []
     for _ in range(MAP_HEIGHT):
         line = f.readline().rstrip("\n")
         row = []
         for ch in line:
-            if ch == "1":
-                row.append(True)
-            else:
-                row.append(False)
+            row.append(True if ch == "1" else False)
         fog.append(row)
+
     f.close()
 
-    clear_fog(fog, player) 
+    # reveal around player per your rule (2x2)
+    clear_fog(fog, player)
+    print("Game loaded successfully!")
     return
 
 def show_main_menu():
@@ -202,16 +228,13 @@ def show_town_menu():
     # TODO: Show Day
     print("----- Sundrop Town -----")
     print("(B)uy stuff")
+    print("(S)ell minerals")
     print("See Player (I)nformation")
     print("See Mine (M)ap")
     print("(E)nter mine")
     print("Sa(V)e game")
     print("(Q)uit to main menu")
     print("------------------------")
-
-def buy_stuff():
-    print("\n--- Sundrop Shop (placeholder) ---")
-    print("Nothing to buy yet. (Implement later)")
 
 def roll_day_prices():
     today_prices['copper'] = randint(prices['copper'][0], prices['copper'][1])
@@ -250,6 +273,7 @@ def sell_all():
 def end_of_day():
     player['day'] = player['day'] + 1
     player['turns'] = TURNS_PER_DAY
+    player['steps'] = 0    
     print("\nYou return to town to rest.")
     print("*** A new day dawns! DAY " + str(player['day']) + " ***")
     roll_day_prices()
@@ -265,83 +289,150 @@ def try_move(dx, dy):
     # Move
     player['x'] = nx
     player['y'] = ny
-
-    # Check tile pickup
+    player['steps'] = player['steps'] + 1
     tile = game_map[ny][nx]
-    if tile == 'C':
-        player['copper'] = player['copper'] + 1
-        game_map[ny][nx] = ' '
-        print("You mined some copper!")
-    elif tile == 'S':
-        player['silver'] = player['silver'] + 1
-        game_map[ny][nx] = ' '
-        print("You mined some silver!")
-    elif tile == 'G':
-        player['gold'] = player['gold'] + 1
-        game_map[ny][nx] = ' '
-        print("You mined some gold!")
-
-    # Reveal new area
+    if tile in ('C', 'S', 'G'):
+        if inventory_count() >= player['capacity']:
+            print("Your backpack is full!")
+        else:
+            if tile == 'C':
+                player['copper'] = player['copper'] + 1
+                game_map[ny][nx] = ' '
+                print("You mined some copper!")
+            elif tile == 'S':
+                 player['silver'] = player['silver'] + 1
+                 game_map[ny][nx] = ' '
+                 print("You mined some silver!")                
+            elif tile == 'G':     
+                print("Your pickaxe is too weak to mine gold.")
+    
     clear_fog(fog, player)
     return True
 
 def enter_mine():
-    print("\n--- Entering the Mine ---")
-    print("Controls: W/A/S/D to move, V=View, M=Full Map, Q=Leave")
     while True:
-        print("Turns left today: " + str(player['turns']))
-        cmd = input("> ").strip().lower()
+        print("---------------------------------------------------")
+        print(" DAY " + str(player['day']))
+        print("---------------------------------------------------")
+        print("DAY " + str(player['day']))
 
-        if cmd == 'q':
-            print("You use the portal stone to return to town.")
-            return
+        draw_view(game_map, fog, player)
+
+        print("Turns left: " + str(player['turns']) +
+              " Load: " + str(inventory_count()) + " / " + str(player['capacity']) +
+              " Steps: " + str(player['steps']))
+        print("(WASD) to move")
+        print("(M)ap, (I)nformation, (P)ortal, (Q)uit to main menu")
+
+        action = input("Action? ").strip().lower()
+
+        if action == 'q':
+            return "quit_to_main"
+
+        if action == 'p':
+            print("-----------------------------------------------------")
+            print("You place your portal stone here and zap back to town.")
+            found_town = False
+            for yy in range(MAP_HEIGHT):
+                for xx in range(MAP_WIDTH):
+                    if game_map[yy][xx] == 'T':
+                        player['x'] = xx
+                        player['y'] = yy
+                        found_town = True
+                        break
+                if found_town:
+                    break
+            clear_fog(fog, player)
+
+            # Sell all minerals automatically
+            c = player['copper']
+            s = player['silver']
+            g = player['gold']
+            total = (c * today_prices['copper'] +
+                     s * today_prices['silver'] +
+                     g * today_prices['gold'])
+
+            if total > 0:
+                if s == 0 and g == 0:
+                    print("You sell " + str(c) + " copper ore for " + str(total) + " GP.")
+                elif c == 0 and g == 0:
+                    print("You sell " + str(s) + " silver ore for " + str(total) + " GP.")
+                elif c == 0 and s == 0:
+                    print("You sell " + str(g) + " gold ore for " + str(total) + " GP.")
+                else:
+                    print("You sell your minerals for " + str(total) + " GP.")
+
+                player['GP'] = player['GP'] + total
+                player['copper'] = 0
+                player['silver'] = 0
+                player['gold'] = 0
+                print("You now have " + str(player['GP']) + " GP!")
+            else:
+                print("You have no minerals to sell.")
+
+            # Start next day (resets turns, steps, rolls prices, prints DAY banner)
+            end_of_day()
+            return  # go back to town menu loop
 
         acted = False
-        if cmd == 'w':
+        if action == 'w':
             acted = try_move(0, -1)
-        elif cmd == 's':
+        elif action == 's':
             acted = try_move(0, 1)
-        elif cmd == 'a':
+        elif action == 'a':
             acted = try_move(-1, 0)
-        elif cmd == 'd':
+        elif action == 'd':
             acted = try_move(1, 0)
-        elif cmd == 'v':
-            draw_view(game_map, fog, player)
-        elif cmd == 'm':
+        elif action == 'm':
             draw_map(game_map, fog, player)
+            input("\n(Press Enter to continue...)")
+        elif action == 'i':
+            show_information(player)
+            input("\n(Press Enter to continue...)")
         else:
-            print("Use W/A/S/D to move, or V, M, Q.")
+            print("Use WASD to move, or M, I, P, Q.")
+            continue
 
         if acted:
             player['turns'] = player['turns'] - 1
             if player['turns'] <= 0:
                 end_of_day()
-                return      
+                return
 
 def buy_stuff():
-    print("\n--- Sundrop Shop ---")
-    print("1. Copper Pickaxe - 50 GP")
-    print("2. Silver Pickaxe - 150 GP")
-    print("3. Exit shop")
+    while True:
+        print("----------------------- Shop Menu -------------------------")
+        print("(P)ickaxe upgrade to Level 2 to mine silver ore for 50 GP")
+        print("(B)ackpack upgrade to carry " + str(player['capacity'] + 2) +
+      " items for " + str(player['backpack_upgrade_cost']) + " GP")
+        print("(L)eave shop")
+        print("-----------------------------------------------------------")
+        print("GP: " + str(player['GP']))
+        print("-----------------------------------------------------------")
+        choice = input("Your choice? ").strip().lower()
 
-    choice = input("What would you like to buy? ").strip()
-
-    if choice == "1":
-        if player['GP'] >= 50:
-            player['GP'] -= 50
-            print("You bought a Copper Pickaxe!")
+        if choice == 'p':
+            if player['pickaxe'] >= 2:
+                print("Your pickaxe is already Level 2.")
+            elif player['GP'] >= 50:
+                player['GP'] -= 50
+                player['pickaxe'] = 2
+                print("You upgraded your pickaxe to Level 2. You can mine silver now!")
+            else:
+                print("Not enough GP.")
+        elif choice == 'b':
+            if player['GP'] >= player['backpack_upgrade_cost']:
+                player['GP'] -= player['backpack_upgrade_cost']
+                player['capacity'] += 2  # each upgrade adds 2 slots
+                print("Congratulations! You can now carry " + str(player['capacity']) + " items!")
+                player['backpack_upgrade_cost'] += 4  # next upgrade costs 4 GP more
+            else:
+                print("Not enough GP.")
+        elif choice == 'l': 
+            print("Leaving shop...")
+            return
         else:
-            print("Not enough GP!")
-    elif choice == "2":
-        if player['GP'] >= 150:
-            player['GP'] -= 150
-            print("You bought a Silver Pickaxe!")
-        else:
-            print("Not enough GP!")
-    elif choice == "3":
-        print("Leaving shop...")
-    else:
-        print("Invalid choice.")
+            print("Invalid choice.")
 
 #--------------------------- MAIN GAME ---------------------------
 game_state = 'main'
@@ -355,7 +446,7 @@ print("-----------------------------------------------------------")
 
 def town_menu():
     while True:
-        print(f"DAY {player.get('day', 1)}")
+        print("DAY " + str(player['day']))
         print("Today's prices: Copper " + str(today_prices['copper']) +
       " | Silver " + str(today_prices['silver']) +
       " | Gold " + str(today_prices['gold']))
@@ -364,6 +455,10 @@ def town_menu():
 
         if choice == "b":
             buy_stuff()
+            input("\n(Press Enter to return to town...)")
+        elif choice == "s":
+            sell_all()
+            input("\n(Press Enter to return to town...)")
         elif choice == "i":
             show_information(player)
             input("\n(Press Enter to return to town...)")
@@ -371,8 +466,9 @@ def town_menu():
             draw_map(game_map, fog, player)
             input("\n(Press Enter to return to town...)")
         elif choice == "e":
-            print("Entering the mine...")
-            enter_mine()
+            result = enter_mine()
+            if result == "quit_to_main":
+                return
         elif choice == "v":
             save_game(game_map, fog, player)
             print("Game saved!")
@@ -392,7 +488,7 @@ while True:
         player['day'] = 1
         initialize_game(game_map, fog, player)
         roll_day_prices()
-        print(f"Pleased to meet you, {miner}. Welcome to Sundrop Town!")
+        print("Pleased to meet you, "+ miner + ". Welcome to Sundrop Town!")
         town_menu()                 
 
     elif choice1 == "l":
