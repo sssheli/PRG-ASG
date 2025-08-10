@@ -155,8 +155,14 @@ def save_game(game_map, fog, player):
     # 4: name
     f.write(player['name'] + "\n")
     # 5: upgrades & steps
-    f.write(str(player['pickaxe']) + " " + str(player['capacity']) + " " +
-            str(player['backpack_upgrade_cost']) + " " + str(player['steps']) + "\n")
+    f.write(
+    str(player['pickaxe']) + " " +
+    str(player['capacity']) + " " +
+    str(player['backpack_upgrade_cost']) + " " +
+    str(player['steps']) + " " +
+    str(player.get('portal_x', -1)) + " " +  # -1 means “no portal yet”
+    str(player.get('portal_y', -1)) + "\n"
+)
     # 6: fog header
     f.write("FOG\n")
     
@@ -195,7 +201,10 @@ def load_game(game_map, fog, player):
     player['capacity'] = int(parts[1])
     player['backpack_upgrade_cost'] = int(parts[2])
     player['steps'] = int(parts[3])
-
+    # optional portal coords (older saves won’t have them)
+    if len(parts) >= 6:
+        player['portal_x'] = int(parts[4])
+        player['portal_y'] = int(parts[5])
     # 6: "FOG"
     f.readline()
 
@@ -296,16 +305,23 @@ def try_move(dx, dy):
             print("Your backpack is full!")
         else:
             if tile == 'C':
-                player['copper'] = player['copper'] + 1
+                player['copper'] += 1
                 game_map[ny][nx] = ' '
                 print("You mined some copper!")
             elif tile == 'S':
-                 player['silver'] = player['silver'] + 1
-                 game_map[ny][nx] = ' '
-                 print("You mined some silver!")                
-            elif tile == 'G':     
-                print("Your pickaxe is too weak to mine gold.")
-    
+                if player['pickaxe'] >= 2:
+                    player['silver'] += 1
+                    game_map[ny][nx] = ' '
+                    print("You mined some silver!")
+                else:
+                    print("Your pickaxe is too weak to mine silver.")
+            elif tile == 'G':
+                if player['pickaxe'] >= 3:
+                    player['gold'] += 1
+                    game_map[ny][nx] = ' '
+                    print("You mined some gold!")
+                else:
+                    print("Your pickaxe is too weak to mine gold.")
     clear_fog(fog, player)
     return True
 
@@ -332,6 +348,12 @@ def enter_mine():
         if action == 'p':
             print("-----------------------------------------------------")
             print("You place your portal stone here and zap back to town.")
+
+            # remember where you placed the portal
+            player['portal_x'] = player['x']
+            player['portal_y'] = player['y']
+
+            # jump to town tile 'T'
             found_town = False
             for yy in range(MAP_HEIGHT):
                 for xx in range(MAP_WIDTH):
@@ -342,12 +364,11 @@ def enter_mine():
                         break
                 if found_town:
                     break
+
             clear_fog(fog, player)
 
             # Sell all minerals automatically
-            c = player['copper']
-            s = player['silver']
-            g = player['gold']
+            c = player['copper']; s = player['silver']; g = player['gold']
             total = (c * today_prices['copper'] +
                      s * today_prices['silver'] +
                      g * today_prices['gold'])
@@ -362,7 +383,7 @@ def enter_mine():
                 else:
                     print("You sell your minerals for " + str(total) + " GP.")
 
-                player['GP'] = player['GP'] + total
+                player['GP'] += total
                 player['copper'] = 0
                 player['silver'] = 0
                 player['gold'] = 0
@@ -370,9 +391,9 @@ def enter_mine():
             else:
                 print("You have no minerals to sell.")
 
-            # Start next day (resets turns, steps, rolls prices, prints DAY banner)
+            # New day
             end_of_day()
-            return  # go back to town menu loop
+            return
 
         acted = False
         if action == 'w':
@@ -402,7 +423,12 @@ def enter_mine():
 def buy_stuff():
     while True:
         print("----------------------- Shop Menu -------------------------")
-        print("(P)ickaxe upgrade to Level 2 to mine silver ore for 50 GP")
+        if player['pickaxe'] == 1:
+            print("(P)ickaxe upgrade to Level 2 to mine silver ore for 50 GP")
+        elif player['pickaxe'] == 2:
+            print("(P)ickaxe upgrade to Level 3 to mine gold ore for 150 GP")
+        else:
+            print("(P)ickaxe upgrade: (Max level reached)")
         print("(B)ackpack upgrade to carry " + str(player['capacity'] + 2) +
       " items for " + str(player['backpack_upgrade_cost']) + " GP")
         print("(L)eave shop")
@@ -412,14 +438,22 @@ def buy_stuff():
         choice = input("Your choice? ").strip().lower()
 
         if choice == 'p':
-            if player['pickaxe'] >= 2:
-                print("Your pickaxe is already Level 2.")
-            elif player['GP'] >= 50:
-                player['GP'] -= 50
-                player['pickaxe'] = 2
-                print("You upgraded your pickaxe to Level 2. You can mine silver now!")
+            if player['pickaxe'] == 1:
+                if player['GP'] >= 50:
+                    player['GP'] -= 50
+                    player['pickaxe'] = 2
+                    print("You upgraded your pickaxe to Level 2. You can mine silver now!")
+                else:
+                    print("Not enough GP.")
+            elif player['pickaxe'] == 2:
+                if player['GP'] >= 150:
+                    player['GP'] -= 150
+                    player['pickaxe'] = 3
+                    print("You upgraded your pickaxe to Level 3. You can mine gold now!")
+                else:
+                    print("Not enough GP.")
             else:
-                print("Not enough GP.")
+                print("Your pickaxe is already Level 3.")
         elif choice == 'b':
             if player['GP'] >= player['backpack_upgrade_cost']:
                 player['GP'] -= player['backpack_upgrade_cost']
@@ -433,6 +467,7 @@ def buy_stuff():
             return
         else:
             print("Invalid choice.")
+
 
 #--------------------------- MAIN GAME ---------------------------
 game_state = 'main'
@@ -466,17 +501,28 @@ def town_menu():
             draw_map(game_map, fog, player)
             input("\n(Press Enter to return to town...)")
         elif choice == "e":
-            result = enter_mine()
+            if 'portal_x' in player and 'portal_y' in player and player['portal_x'] >= 0 and player['portal_y'] >= 0:
+                player['x'] = player['portal_x']
+                player['y'] = player['portal_y']
+            else:
+                found_town = False
+                for yy in range(MAP_HEIGHT):
+                    for xx in range(MAP_WIDTH):
+                        if game_map[yy][xx] == 'T':
+                            player['x'] = xx
+                            player['y'] = yy
+                            found_town = True
+                            break
+                    if found_town:
+                        break
+                if not found_town:
+                    print("Couldn't find the town tile 'T' on the map.")
+                    continue  # stay in town menu 
+            clear_fog(fog, player)          # reveal the starting spot
+            result = enter_mine()            # show mine UI
             if result == "quit_to_main":
                 return
-        elif choice == "v":
-            save_game(game_map, fog, player)
-            print("Game saved!")
-        elif choice == "q":
-            print("Returning to main menu...")
-            return   
-        else:
-            print("Invalid choice in town. Try again.\n")
+
 
 while True:
     show_main_menu()
